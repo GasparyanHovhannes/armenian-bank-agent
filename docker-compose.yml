@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  livekit:
+    image: livekit/livekit-server
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+    command: ["--dev"]
+
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - C:/qdrant_storage:/qdrant/storage
+
+  agent:
+    build: .
+    depends_on:
+      - livekit
+      - qdrant
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    volumes:
+      - ./agent:/app/agent

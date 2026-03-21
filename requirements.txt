@@ -1,0 +1,17 @@
+livekit-agents==1.5.0
+livekit-plugins-silero
+livekit-plugins-openai
+faster-whisper
+transformers
+torch
+torchaudio
+sentence-transformers
+qdrant-client
+openai
+numpy
+soundfile
+requests
+beautifulsoup4
+livekit
+python-dotenv
+seleniumbase
