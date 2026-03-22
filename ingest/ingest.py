@@ -12,7 +12,7 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 COLLECTION_NAME = "armenian_banks"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 VECTOR_SIZE = 1024  # multilingual-e5-large output size
-DATA_PATH = "data/scraped/all_banks.json"
+DATA_PATH = "data/merged/all_banks.json"
 
 
 def setup_collection(client: QdrantClient):

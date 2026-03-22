@@ -19,19 +19,10 @@ class ArmenianBankRAG:
             f"query: {query}"
         ).tolist()
 
-        # Filter to only ACBA Bank which has real data
         results = self.client.query_points(
             collection_name=self.collection,
             query=query_vector,
-            limit=top_k,
-            query_filter=Filter(
-                must=[
-                    FieldCondition(
-                        key="bank",
-                        match=MatchValue(value="ACBA Bank")
-                    )
-                ]
-            )
+            limit=top_k
         ).points
 
         if not results:
