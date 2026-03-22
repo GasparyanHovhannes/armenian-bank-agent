@@ -2,14 +2,51 @@
 
 A voice AI customer support agent for Armenian banks built with LiveKit (open source), OpenAI Whisper STT, GPT-4o LLM, and RAG over scraped and manually curated bank data.
 
-## Architecture
+## Architecture & Design Decisions
 
-- **STT**: OpenAI Whisper API (Armenian language `hy`)
-- **LLM**: GPT-4o with RAG grounding — answers only from bank knowledge base
-- **TTS**: OpenAI TTS (`tts-1`, `alloy` voice)
-- **Vector DB**: Qdrant (self-hosted via Docker)
-- **Transport**: LiveKit open-source server (self-hosted via Docker)
-- **Embeddings**: `intfloat/multilingual-e5-large` (multilingual, supports Armenian)
+### System Overview
+
+The agent follows a classic voice AI pipeline: the user speaks in Armenian, their speech is transcribed, a RAG-augmented LLM generates an answer grounded in real bank data, and the answer is spoken back in Armenian.
+```
+User speaks → LiveKit (WebRTC) → Whisper STT → RAG retrieval → GPT-4o → OpenAI TTS → User hears answer
+```
+
+### Why LiveKit (open source, self-hosted)?
+
+The project requirement specifies the open-source LiveKit framework without LiveKit Cloud. LiveKit handles real-time audio transport using WebRTC — the same protocol behind Google Meet and Zoom. Self-hosting means zero per-minute costs and full data control. The Python SDK (`livekit-agents`) provides a clean pipeline abstraction for STT, LLM, and TTS components.
+
+### Why OpenAI Whisper API for STT?
+
+Armenian is a low-resource language with limited ASR support. Whisper is trained on 680,000 hours of multilingual audio and explicitly supports Armenian (`hy` language code). We use the API version rather than local Whisper because it delivers significantly better accuracy on CPU hardware — local Whisper on CPU is too slow for real-time conversation.
+
+### Why GPT-4o for LLM?
+
+GPT-4o has the strongest Armenian language understanding among available LLMs. More importantly, it follows strict system prompt instructions reliably — critical for enforcing RAG grounding (answering only from provided context) and topic restriction (credits, deposits, branches only). Smaller models tend to ignore these constraints and hallucinate.
+
+### Why RAG instead of fine-tuning?
+
+RAG (Retrieval Augmented Generation) is the right choice here for three reasons. First, bank data changes frequently — deposit rates and branch hours update regularly. With RAG you update the data file and re-ingest; with fine-tuning you retrain the model. Second, RAG is transparent — you can see exactly what context the LLM used. Third, RAG scales easily to new banks — just add data, no model changes needed.
+
+### Why multilingual-e5-large for embeddings?
+
+This model from Intel/Microsoft is trained on 100+ languages including Armenian and produces 1024-dimensional vectors that capture semantic meaning across languages. This means a user asking "what are the loan rates?" in Armenian will match chunks about loan rates even if the chunk text is in English — critical since our bank data is in English.
+
+### Why Qdrant for vector database?
+
+Qdrant is open-source, self-hostable via Docker, and purpose-built for vector similarity search. It supports filtering by metadata (bank name, topic) which allows precise retrieval. ChromaDB was considered but Qdrant has better performance at scale and a cleaner Python API.
+
+### Why OpenAI TTS?
+
+Armenian TTS is an extremely limited field. Meta's MMS-TTS supports Armenian but requires HuggingFace authentication and produces lower quality output. OpenAI TTS (alloy voice) produces natural-sounding Armenian speech with no additional setup, leveraging the same API key already used for Whisper and GPT-4o.
+
+### Data Pipeline
+
+Bank knowledge is built from two sources merged together:
+
+- `data/scraped/` — raw data scraped from bank websites using Selenium
+- `data/manual/` — manually curated, verified data for accurate financial information
+
+The merge script (`ingest/merge_data.py`) filters out low-quality scraped chunks and combines them with manual data into `data/merged/all_banks.json`, which is then embedded and stored in Qdrant.
 
 ## Banks Covered
 
@@ -17,31 +54,22 @@ A voice AI customer support agent for Armenian banks built with LiveKit (open so
 - Evocabank — Credits, Deposits, Branch Locations
 - Ardshinbank — Credits, Deposits, Branch Locations
 
-## Model Choice Justification
+## Model Choice Summary
 
 | Component | Model | Why |
 |---|---|---|
-| STT | OpenAI Whisper API | Best Armenian ASR accuracy, native `hy` language support |
-| LLM | GPT-4o | Superior Armenian reasoning, strict RAG instruction-following |
-| TTS | OpenAI TTS (alloy) | Reliable Armenian speech synthesis, no setup required |
-| Embeddings | multilingual-e5-large | Trained on 100+ languages including Armenian |
+| STT | OpenAI Whisper API | Best Armenian ASR, native `hy` support, fast via API |
+| LLM | GPT-4o | Best Armenian reasoning, strict RAG instruction-following |
+| TTS | OpenAI TTS (alloy) | Best available Armenian TTS, no extra setup |
+| Embeddings | multilingual-e5-large | 100+ languages including Armenian, strong semantic search |
 | Vector DB | Qdrant | Open-source, self-hostable, fast cosine similarity search |
 | Transport | LiveKit OSS | Open-source WebRTC, fully self-hosted, Python SDK |
-
-## Data Pipeline
-
-Bank knowledge is built from two sources that are merged together:
-
-- `data/scraped/` — raw data scraped from bank websites using Selenium
-- `data/manual/` — manually curated, verified data for accurate financial information
-
-The merge script (`ingest/merge_data.py`) filters out low-quality scraped chunks (navigation text, JavaScript errors) and combines them with the manual data into `data/merged/all_banks.json`, which is then embedded and stored in Qdrant.
 
 ## Prerequisites
 
 - Python 3.11+
 - Docker Desktop — download from https://www.docker.com/products/docker-desktop
-- OpenAI API key — you need a paid OpenAI API key
+- OpenAI API key — you need a paid OpenAI account with at least $5 of credits. Get your key at https://platform.openai.com/api-keys and set up billing at https://platform.openai.com/settings/billing/overview
 - `lk.exe` — download from https://github.com/livekit/livekit-cli/releases/latest, get `lk_windows_amd64.zip`, unzip and place `lk.exe` in the project root folder
 
 ## Setup Instructions
@@ -136,6 +164,4 @@ python -c "from qdrant_client import QdrantClient; QdrantClient(host='localhost'
 python ingest/ingest.py
 ```
 
-**Step 3 — Update the agent greeting in `agent/main.py`** to mention the new bank. No other code changes needed.
-
-The RAG system automatically handles the new bank — Qdrant stores all banks together and the embedding search finds the most relevant chunks regardless of which bank they come from.
+**Step 3 — Restart the agent.** No other code changes needed. The agent greeting automatically reads bank names from the data file, so it will mention the new bank without any manual updates.
