@@ -45,6 +45,14 @@ _rag = ArmenianBankRAG()
 _llm = openai.LLM(model="gpt-4o")
 logger.info("Models loaded.")
 
+def get_bank_names() -> str:
+    import json
+    with open("data/merged/all_banks.json", "r", encoding="utf-8") as f:
+        chunks = json.load(f)
+    banks = sorted(set(chunk["bank"] for chunk in chunks))
+    return ", ".join(banks)
+
+BANK_NAMES = get_bank_names()
 
 class RAGAgent(Agent):
     def __init__(self):
@@ -88,10 +96,9 @@ async def entrypoint(ctx: JobContext):
 
     await session.generate_reply(
         instructions=(
-            "Greet the user warmly in Armenian. Tell them you are an Armenian "
-            "bank support assistant and can help with questions about "
-            "credits, deposits, and branch locations for ACBA Bank, "
-            "Evocabank, and Ardshinbank."
+            f"Greet the user warmly in Armenian. Tell them you are an Armenian "
+            f"bank support assistant and can help with questions about "
+            f"credits, deposits, and branch locations for {BANK_NAMES}."
         )
     )
 
